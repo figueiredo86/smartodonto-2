@@ -1,10 +1,16 @@
 from sqlalchemy import create_engine, Column, Integer, String, Enum, ForeignKey, Float, Date, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
 
 
 # Configuração do banco de dados MySQL
-DATABASE_URL = "mysql+pymysql://admin:molezA002411@smartodonto.cxa9r2ppxso1.us-east-1.rds.amazonaws.com/consultorioFabiana"
+# DATABASE_URL = "mysql+pymysql://admin:molezA002411@smartodonto.cxa9r2ppxso1.us-east-1.rds.amazonaws.com/consultorioFabiana"
+DATABASE_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PWD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_DATABASE')}"
 # Substitua:
 # - usuario: seu usuário do MySQL
 # - senha: sua senha do MySQL
