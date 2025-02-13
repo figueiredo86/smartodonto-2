@@ -31,11 +31,13 @@ def mostrar_pagina_procedimentos():
             )
 
             # Adiciona e salva no banco de dados
-            session.add(novo_procedimento)
-            session.commit()
-
-            st.success("Procedimento cadastrado com sucesso!")
-            st.rerun()  # Recarrega a página
+            try:
+                session.add(novo_procedimento)
+                session.commit()
+                st.success("Procedimento cadastrado com sucesso!")
+                st.rerun()  # Recarrega a página
+            except Exception as e:
+                session.rollbackback()
         else:
             st.error("Por favor, preencha todos os campos obrigatórios.")
     if st.checkbox("Listar procedimentos", value=True):
@@ -90,15 +92,21 @@ def mostrar_pagina_procedimentos():
                     procedimento_selecionado.procedimento_nome = novo_nome
                     procedimento_selecionado.procedimento_valor = novo_valor
                     procedimento_selecionado.procedimento_status = 1 if novo_status == "Ativo" else 0
-                    session.commit()
-                    st.success("Procedimento atualizado com sucesso!")
-                    st.rerun()  # Recarrega a página
+                    try:
+                        session.commit()
+                        st.success("Procedimento atualizado com sucesso!")
+                        st.rerun()  # Recarrega a página
+                    except Exception as e:
+                        session.rollbackback()
 
                 # Botão para excluir o procedimento
                 if st.button("Excluir Procedimento", key="excluir_procedimento"):
-                    session.delete(procedimento_selecionado)
-                    session.commit()
-                    st.success("Procedimento excluído com sucesso!")
-                    st.rerun()  # Recarrega a página
+                    try:
+                        session.delete(procedimento_selecionado)
+                        session.commit()
+                        st.success("Procedimento excluído com sucesso!")
+                        st.rerun()  # Recarrega a página
+                    except Exception as e:
+                        session.rollbackback()
         else:
             st.info("Nenhum procedimento cadastrado no momento.")

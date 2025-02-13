@@ -87,14 +87,15 @@ def mostrar_pagina_agenda():
                         "Horário": f"{hora}:00",
                         "Profissional": profissional_nome,
                         "Paciente": paciente_nome,
-                        "Cor de Fundo": cor_fundo,
-                        "Ação": link_whatsapp  # Renomeado para "Ação"
+                        "Ação": link_whatsapp,
+                        "Cor de Fundo": cor_fundo  # Coluna mantida para aplicar estilos
                     })
 
             df_horarios = pd.DataFrame(tabela_horarios)
 
             # Função para aplicar estilos ao DataFrame
             def apply_styles(row):
+                # Aplica a cor de fundo apenas na coluna "Paciente"
                 return [f"background-color: {row['Cor de Fundo']};"] * len(df_horarios.columns)
 
             # Adiciona botões de WhatsApp na coluna "Ação"
@@ -106,47 +107,51 @@ def mostrar_pagina_agenda():
 
             # Aplica os estilos ao DataFrame
             styled_df = df_horarios.style.apply(apply_styles, axis=1)
+
+            # Exibe o DataFrame com estilos
             st.write(styled_df.to_html(escape=False), unsafe_allow_html=True)
 
-    # Agenda Dinâmica
-    st.write("### Selecione um intervalo de datas para visualizar e gerenciar consultas")
-    col1, col2 = st.columns(2)
+    if st.checkbox("Selecionar intervalo de datas para consulta"):
+        # Agenda Dinâmica
+        st.write("### Selecione um intervalo de datas para visualizar e gerenciar consultas")
+        col1, col2 = st.columns(2)
 
-    with col1:
-        data_inicio = st.date_input("Data de Início", key="data_inicio")
-    with col2:
-        data_fim = st.date_input("Data de Fim", key="data_fim")
+        with col1:
+            data_inicio = st.date_input("Data de Início", key="data_inicio")
+        with col2:
+            data_fim = st.date_input("Data de Fim", key="data_fim")
 
-    if data_inicio and data_fim and data_inicio <= data_fim:
-        datas_selecionadas = [data_inicio + timedelta(days=i) for i in range((data_fim - data_inicio).days + 1)]
-        datas_formatadas = [data.strftime("%Y-%m-%d") for data in datas_selecionadas]
+        if data_inicio and data_fim and data_inicio <= data_fim:
+            datas_selecionadas = [data_inicio + timedelta(days=i) for i in range((data_fim - data_inicio).days + 1)]
+            datas_formatadas = [data.strftime("%Y-%m-%d") for data in datas_selecionadas]
 
-        horarios = list(range(9, 19))  # De 9h às 18h
-        agenda_dinamica = {hora: {data: "" for data in datas_formatadas} for hora in horarios}
-        cores = {data: {hora: "white" for hora in horarios} for data in datas_formatadas}
+            horarios = list(range(9, 19))  # De 9h às 18h
+            agenda_dinamica = {hora: {data: "" for data in datas_formatadas} for hora in horarios}
+            cores = {data: {hora: "white" for hora in horarios} for data in datas_formatadas}
 
-        consultas = session.query(Consulta).filter(Consulta.consulta_data.in_(datas_formatadas)).all()
+            consultas = session.query(Consulta).filter(Consulta.consulta_data.in_(datas_formatadas)).all()
 
-        for consulta in consultas:
-            paciente = session.query(Paciente).filter_by(paciente_id=consulta.consulta_pacienteId).first()
-            paciente_nome = paciente.paciente_nome if paciente else "Paciente não encontrado"
+            for consulta in consultas:
+                paciente = session.query(Paciente).filter_by(paciente_id=consulta.consulta_pacienteId).first()
+                paciente_nome = paciente.paciente_nome if paciente else "Paciente não encontrado"
 
-            status = session.query(ConsultaStatus).filter_by(consultaStatus_id=consulta.consulta_status).first()
-            cor_fundo = f"rgb({status.consultaStatus_rgb})" if status else "white"
+                status = session.query(ConsultaStatus).filter_by(consultaStatus_id=consulta.consulta_status).first()
+                if status:
+                    cor_fundo = f"rgb({status.consultaStatus_rgb})"
 
-            agenda_dinamica[consulta.consulta_hora][consulta.consulta_data] = paciente_nome
-            cores[consulta.consulta_data][consulta.consulta_hora] = cor_fundo
+                agenda_dinamica[consulta.consulta_hora][consulta.consulta_data] = paciente_nome
+                cores[consulta.consulta_data][consulta.consulta_hora] = cor_fundo
 
-        df_agenda = pd.DataFrame.from_dict(agenda_dinamica, orient="index", columns=datas_formatadas)
-        df_agenda.index = [f"{hora}:00" for hora in df_agenda.index]
+            df_agenda = pd.DataFrame.from_dict(agenda_dinamica, orient="index", columns=datas_formatadas)
+            df_agenda.index = [f"{hora}:00" for hora in df_agenda.index]
 
-        # Função para aplicar estilos ao DataFrame
-        def apply_styles(row):
-            hora = int(row.name.split(":")[0])  # Extrai a hora do índice
-            return [f"background-color: {cores[col][hora]};" for col in df_agenda.columns]
+            # Função para aplicar estilos ao DataFrame
+            def apply_styles(row):
+                hora = int(row.name.split(":")[0])  # Extrai a hora do índice
+                return [f"background-color: {cores[col][hora]};" for col in df_agenda.columns]
 
-        st.write("### Agenda Dinâmica")
-        st.dataframe(df_agenda.style.apply(apply_styles, axis=1))
+            st.write("### Agenda Dinâmica")
+            st.dataframe(df_agenda.style.apply(apply_styles, axis=1))
 
     # Formulário para agendar nova consulta
     if st.checkbox("Agendar Nova Consulta"):
@@ -168,6 +173,7 @@ def mostrar_pagina_agenda():
 
         procedimento_nome = st.selectbox("Selecione o Procedimento:", [p.procedimento_nome for p in procedimentos])
         procedimento_id = next((p.procedimento_id for p in procedimentos if p.procedimento_nome == procedimento_nome), None)
+        procedimento_valor = next((p.procedimento_valor for p in procedimentos if p.procedimento_nome == procedimento_nome), 0.0)
 
         horarios_disponiveis = [f"{hora}:00" for hora in range(9, 19) if not session.query(Consulta).filter(
             Consulta.consulta_data == data_formatada,
@@ -184,7 +190,8 @@ def mostrar_pagina_agenda():
                 consulta_procedimentoId=procedimento_id,
                 consulta_data=data_formatada,
                 consulta_hora=int(horario_selecionado.split(":")[0]),
-                consulta_status=1
+                consulta_status=1,
+                consulta_valor_total=procedimento_valor  # Inclui o valor do procedimento
             )
             session.add(nova_consulta)
             session.commit()

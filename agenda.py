@@ -1,5 +1,6 @@
 import streamlit as st
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 from db.models import engine, Horario, Profissional, Paciente, Procedimento, Consulta, ConsultaStatus, Template
 from datetime import datetime, timedelta
 import pandas as pd
@@ -10,7 +11,7 @@ session = Session()
 
 def get_template_mensagem(paciente_nome, data, hora):
     template = session.query(Template).first()
-    if template and template.template_texto:
+    if template:
         data_formatada = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
         horario_formatado = f"{hora:02d}:00"
         return (
@@ -45,7 +46,7 @@ def mostrar_pagina_agenda():
                 profissional = session.query(Profissional).filter_by(profissional_id=horario.horario_profissionalId).first()
                 profissional_nome = profissional.profissional_nome if profissional else "Desconhecido"
 
-                for hora in range(horario.horario_horaInicio, horario.horario_horaFinal + 1):
+                for hora in range(max(9, horario.horario_horaInicio), min(18, horario.horario_horaFinal) + 1):
                     consulta = session.query(Consulta).filter(
                         Consulta.consulta_data == data_formatada,
                         Consulta.consulta_hora == hora,
@@ -74,17 +75,13 @@ def mostrar_pagina_agenda():
                         "Profissional": profissional_nome,
                         "Paciente": paciente_nome,
                         "Ação": link_whatsapp,
-                        "_cor_fundo": cor_fundo
+                        "Cor de Fundo": cor_fundo
                     })
 
             df_horarios = pd.DataFrame(tabela_horarios)
 
             def apply_styles(row):
-                return [f"background-color: {row['_cor_fundo']};"] * len(row)
-
-            styled_df = df_horarios.style.apply(apply_styles, axis=1)
-
-            df_horarios = df_horarios.drop(columns=["_cor_fundo"])
+                return [f"background-color: {row['Cor de Fundo']};"] * len(df_horarios.columns)
 
             df_horarios["Ação"] = df_horarios.apply(
                 lambda row: f'<a href="{row["Ação"]}" target="_blank"><button>Confirmar</button></a>'
@@ -92,57 +89,68 @@ def mostrar_pagina_agenda():
                 axis=1
             )
 
+            styled_df = df_horarios.style.apply(apply_styles, axis=1)
+
             st.write(styled_df.to_html(escape=False), unsafe_allow_html=True)
-
-    st.write("### Selecione um intervalo de datas para visualizar e gerenciar consultas")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        data_inicio = st.date_input("Data de Início", key="data_inicio")
-    with col2:
-        data_fim = st.date_input("Data de Fim", key="data_fim")
-
-    if data_inicio and data_fim and data_inicio <= data_fim:
-        datas_selecionadas = [data_inicio + timedelta(days=i) for i in range((data_fim - data_inicio).days + 1)]
-        datas_formatadas = [data.strftime("%Y-%m-%d") for data in datas_selecionadas]
-
-        horarios = list(range(9, 19))
-        agenda_dinamica = {hora: {data: "" for data in datas_formatadas} for hora in horarios}
-
-        consultas = session.query(Consulta).filter(Consulta.consulta_data.in_(datas_formatadas)).all()
-        for consulta in consultas:
-            paciente = session.query(Paciente).filter_by(paciente_id=consulta.consulta_pacienteId).first()
-            paciente_nome = paciente.paciente_nome if paciente else "Paciente não encontrado"
-            agenda_dinamica[consulta.consulta_hora][consulta.consulta_data] = paciente_nome
-
-        df_agenda = pd.DataFrame.from_dict(agenda_dinamica, orient="index", columns=datas_formatadas)
-        df_agenda.index = [f"{hora}:00" for hora in df_agenda.index]
-
+    
+    if st.checkbox("Selecionar intervalo de datas para consulta"):
         st.write("### Agenda Dinâmica")
-        st.dataframe(df_agenda)
+        data_inicio = st.date_input("Data de Início")
+        data_fim = st.date_input("Data de Fim")
+        if data_inicio and data_fim and data_inicio <= data_fim:
+            datas_selecionadas = [data_inicio + timedelta(days=i) for i in range((data_fim - data_inicio).days + 1)]
+            datas_formatadas = [data.strftime("%Y-%m-%d") for data in datas_selecionadas]
+            
+            horarios = list(range(9, 19))
+            agenda_dinamica = {hora: {data: "" for data in datas_formatadas} for hora in horarios}
+            
+            consultas = session.query(Consulta).filter(Consulta.consulta_data.in_(datas_formatadas)).all()
+            for consulta in consultas:
+                paciente = session.query(Paciente).filter_by(paciente_id=consulta.consulta_pacienteId).first()
+                paciente_nome = paciente.paciente_nome if paciente else "Paciente não encontrado"
+                agenda_dinamica[consulta.consulta_hora][consulta.consulta_data] = paciente_nome
+            
+            df_agenda = pd.DataFrame.from_dict(agenda_dinamica, orient="index", columns=datas_formatadas)
+            df_agenda.index = [f"{hora}:00" for hora in df_agenda.index]
+            
+            st.dataframe(df_agenda)
 
     if st.checkbox("Agendar Nova Consulta"):
         st.write("### Agendar Nova Consulta")
+        convenio_padrao = 1  # Defina um valor padrão para consulta_convenioId
+
         pacientes = session.query(Paciente).all()
         profissionais = session.query(Profissional).all()
         procedimentos = session.query(Procedimento).all()
 
-        paciente_nome = st.selectbox("Paciente", [p.paciente_nome for p in pacientes])
-        profissional_nome = st.selectbox("Profissional", [p.profissional_nome for p in profissionais])
-        procedimento_nome = st.selectbox("Procedimento", [p.procedimento_nome for p in procedimentos])
+        paciente_nome = st.selectbox("Selecione o Paciente", [p.paciente_nome for p in pacientes])
+        paciente_id = next((p.paciente_id for p in pacientes if p.paciente_nome == paciente_nome), None)
+
+        profissional_nome = st.selectbox("Selecione o Profissional", [p.profissional_nome for p in profissionais])
+        profissional_id = next((p.profissional_id for p in profissionais if p.profissional_nome == profissional_nome), None)
+
+        procedimento_nome = st.selectbox("Selecione o Procedimento", [p.procedimento_nome for p in procedimentos])
+        procedimento_id = next((p.procedimento_id for p in procedimentos if p.procedimento_nome == procedimento_nome), None)
+        procedimento_valor = next((p.procedimento_valor for p in procedimentos if p.procedimento_nome == procedimento_nome), 0.0)
+
         data_consulta = st.date_input("Data da Consulta")
-        hora_consulta = st.time_input("Horário da Consulta")
+        horario_selecionado = st.time_input("Horário da Consulta",step=3600)
 
         if st.button("Agendar"):
             nova_consulta = Consulta(
-                consulta_pacienteId=[p.paciente_id for p in pacientes if p.paciente_nome == paciente_nome][0],
-                consulta_profissionalId=[p.profissional_id for p in profissionais if p.profissional_nome == profissional_nome][0],
-                consulta_procedimentoId=[p.procedimento_id for p in procedimentos if p.procedimento_nome == procedimento_nome][0],
+                consulta_pacienteId=paciente_id,
+                consulta_profissionalId=profissional_id,
+                consulta_procedimentoId=procedimento_id,
+                consulta_convenioId=convenio_padrao,
                 consulta_data=data_consulta.strftime("%Y-%m-%d"),
-                consulta_hora=hora_consulta.hour,
-                consulta_status=1
+                consulta_hora=horario_selecionado.hour,
+                consulta_status=1,
+                consulta_valor_total=procedimento_valor
             )
-            session.add(nova_consulta)
-            session.commit()
-            st.success("Consulta agendada com sucesso!")
-            st.rerun()
+            try:
+                session.add(nova_consulta)
+                session.commit()
+                st.success("Consulta agendada com sucesso!")
+                st.rerun()
+            except Exception as e:
+                st.rerun()

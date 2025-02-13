@@ -4,7 +4,7 @@ from sqlalchemy.orm import relationship
 
 
 # Configuração do banco de dados MySQL
-DATABASE_URL = "mysql+pymysql://consultorio:consultorio@localhost/consultorio"
+DATABASE_URL = "mysql+pymysql://admin:molezA002411@smartodonto.cxa9r2ppxso1.us-east-1.rds.amazonaws.com/consultorioFabiana"
 # Substitua:
 # - usuario: seu usuário do MySQL
 # - senha: sua senha do MySQL
@@ -24,16 +24,14 @@ class Paciente(Base):
     paciente_id = Column(Integer, primary_key=True, autoincrement=True)
     paciente_nome = Column(String(100), nullable=False)
     paciente_telefone = Column(String(15), nullable=False)
-    paciente_whatsapp = Column(Integer, nullable=False, default=0)
-    paciente_email = Column(String(100), nullable=False)
-    paciente_endereco = Column(String(100), nullable=False)
-    paciente_complemento = Column(String(100), nullable=False)
-    paciente_documento = Column(Integer, nullable=False)
+    paciente_endereco = Column(String(100), default=None)
+    paciente_complemento = Column(String(100), default='None')
+    paciente_documento = Column(Integer, default=None)
     paciente_convenioId = Column(Integer, nullable=False)
-    paciente_cep = Column(Integer, nullable=False)
-    paciente_numero = Column(Integer, nullable=False)
+    paciente_cep = Column(Integer, default=None)
+    paciente_numero = Column(Integer, default=None)
     paciente_status = Column(Boolean, nullable=False, default=1)
-    paciente_ultimaConsulta = Column(Date, nullable=False)
+    paciente_ultimaConsulta = Column(Date, default=None)
 
 # Modelo da tabela `convenios`
 class Convenio(Base):
@@ -53,7 +51,7 @@ class Procedimento(Base):
     procedimento_nome = Column(String(100), nullable=False)
     procedimento_valor = Column(Float, nullable=False, default="0.0")
     procedimento_aceitaConvenio = Column(Boolean, nullable=False, default="1")
-    procedimento_tempo = Column(String(100), nullable=False, default=60)
+    procedimento_tempo = Column(String(100), default=60)
     procedimento_status = Column(Integer, nullable=False, default=1)
 
 # Modelo da tabela `convenios`
@@ -83,6 +81,7 @@ class Consulta(Base):
     consulta_procedimentoId = Column(Integer, nullable=False)
     consulta_convenioId = Column(Integer, nullable=False)
     consulta_data = Column(String(100), nullable=False, default='now()')
+    consulta_valor_total = Column(String(100), nullable=False)
     consulta_hora = Column(Integer, default=9)
     consulta_status = Column(Integer, default=1)
 
@@ -91,7 +90,7 @@ class ConsultaStatus(Base):
 
     consultaStatus_id = Column(Integer, primary_key=True, autoincrement=True)
     consultaStatus_descricao = Column(String(100), nullable=False)
-    consultaStatus_rgb = Column(String, nullable=False)
+    consultaStatus_rgb = Column(String(100), nullable=False)
 
 class Template(Base):
     __tablename__ = 'templates'
