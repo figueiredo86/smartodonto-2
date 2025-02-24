@@ -41,7 +41,6 @@ def get_template_mensagem(paciente_nome, data, hora):
     return f"Olá {paciente_nome}. Tudo bem? Podemos confirmar sua consulta para o dia {data_formatada} às {horario_formatado}?"
 
 def gerar_link_whatsapp(telefone, mensagem):
-    print(mensagem)
     telefone_formatado = "".join(filter(str.isdigit, telefone))
     if not telefone.startswith("+"):
         telefone_formatado = f"+55{telefone_formatado}"
