@@ -154,3 +154,5 @@ def mostrar_pagina_agenda():
                 st.rerun()
             except Exception as e:
                 st.rerun()
+            finally:
+                session.remove()

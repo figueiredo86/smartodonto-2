@@ -1,10 +1,29 @@
 import streamlit as st
 from sqlalchemy.orm import sessionmaker
-from db.models import engine, Convenio
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
+from db.models import Convenio
+import os
+from dotenv import load_dotenv
 
-# Cria uma sessão para interagir com o banco de dados
+
+load_dotenv()
+
+
+DATABASE_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PWD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_DATABASE')}"
+
+# Cria a engine do SQLAlchemy
+engine = create_engine(DATABASE_URL,pool_recycle=3600,pool_pre_ping=True)
+
 Session = sessionmaker(bind=engine)
-session = Session()
+
+# Função para criar uma nova sessão
+def criar_sessao():
+    return Session()
+
+# Inicializa a sessão
+if 'session' not in st.session_state:
+    st.session_state.session = criar_sessao()
 
 def mostrar_pagina_convenios():
     st.title("SmartOdonto - Convênios")
@@ -26,18 +45,23 @@ def mostrar_pagina_convenios():
                 convenio_status=status_num
             )
             try:
-                session.add(novo_convenio)
-                session.commit()
+                st.session_state.session.add(novo_convenio)
+                st.session_state.session.commit()
                 st.success("Convênio cadastrado com sucesso!")
-            except Exception as e:
-                session.rollback()
+            except SQLAlchemyError as e:
+                st.session_state.session.rollback()
+                st.error(f"Erro ao cadastrar convênio: {e}")
         else:
             st.error("Por favor, preencha todos os campos obrigatórios.")
 
     if st.checkbox("Exibir convênios", value=True):
         # Exibe os dados cadastrados
         st.write("### Lista de Convênios Cadastrados")
-        convenios = session.query(Convenio).all()
+        try:
+            convenios = st.session_state.session.query(Convenio).all()
+        except SQLAlchemyError as e:
+            st.error(f"Erro ao realizar consulta: {e}")
+            convenios = []
 
         if convenios:
             dados_convenios = []
@@ -50,16 +74,19 @@ def mostrar_pagina_convenios():
                     "Status": "Ativo" if convenio.convenio_status == 1 else "Inativo"
                 })
             st.table(dados_convenios)
+        else:
+            st.info("Nenhum convênio cadastrado no momento.")
+
         if st.checkbox("Editar/Remover convênio"):
             # Opções de editar e excluir
             st.write("### Opções de Editar e Excluir")
             convenio_id = st.selectbox(
                 "Selecione um convênio para editar ou excluir:",
                 options=[c.convenio_id for c in convenios],
-                format_func=lambda id: session.query(Convenio).filter_by(convenio_id=id).first().convenio_nome,
+                format_func=lambda id: st.session_state.session.query(Convenio).filter_by(convenio_id=id).first().convenio_nome,
                 key="select_convenio"
             )
-            convenio_selecionado = session.query(Convenio).filter_by(convenio_id=convenio_id).first()
+            convenio_selecionado = st.session_state.session.query(Convenio).filter_by(convenio_id=convenio_id).first()
 
             # Formulário de edição
             st.write(f"### Editando Convênio: {convenio_selecionado.convenio_nome}")
@@ -74,24 +101,30 @@ def mostrar_pagina_convenios():
             )
 
             if st.button("Salvar Edições", key="salvar_edicoes"):
-                convenio_selecionado.convenio_nome = novo_nome
-                convenio_selecionado.convenio_telefone = novo_telefone
-                convenio_selecionado.convenio_site = novo_site
-                convenio_selecionado.convenio_status = 1 if novo_status == "Ativo" else 0
                 try:
-                    session.commit()
+                    convenio_selecionado.convenio_nome = novo_nome
+                    convenio_selecionado.convenio_telefone = novo_telefone
+                    convenio_selecionado.convenio_site = novo_site
+                    convenio_selecionado.convenio_status = 1 if novo_status == "Ativo" else 0
+                    st.session_state.session.commit()
                     st.success("Convênio atualizado com sucesso!")
                     st.rerun()
-                except Exception as e:
-                    session.rollback()
+                except SQLAlchemyError as e:
+                    st.session_state.session.rollback()
+                    st.error(f"Erro ao atualizar convênio: {e}")
 
             if st.button("Excluir Convênio", key="excluir_convenio"):
-                session.delete(convenio_selecionado)
                 try:
-                    session.commit()
+                    st.session_state.session.delete(convenio_selecionado)
+                    st.session_state.session.commit()
                     st.success("Convênio excluído com sucesso!")
                     st.rerun()
-                except Exception as e:
-                    session.rollback()
+                except SQLAlchemyError as e:
+                    st.session_state.session.rollback()
+                    st.error(f"Erro ao excluir convênio: {e}")
     else:
         st.info("Nenhum convênio cadastrado no momento.")
+
+# Fechar a sessão ao finalizar
+if 'session' in st.session_state:
+    st.session_state.session.close()

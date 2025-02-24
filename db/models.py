@@ -8,17 +8,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Configuração do banco de dados MySQL
-# DATABASE_URL = "mysql+pymysql://admin:molezA002411@smartodonto.cxa9r2ppxso1.us-east-1.rds.amazonaws.com/consultorioFabiana"
 DATABASE_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PWD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_DATABASE')}"
-# Substitua:
-# - usuario: seu usuário do MySQL
-# - senha: sua senha do MySQL
-# - localhost: o host do banco de dados (pode ser um IP ou domínio)
-# - nome_do_banco: o nome do banco de dados onde estão as tabelas
 
 # Cria a engine do SQLAlchemy
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL,pool_recycle=3600,pool_pre_ping=True)
 
 # Base para as classes do SQLAlchemy
 Base = declarative_base()

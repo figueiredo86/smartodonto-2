@@ -37,7 +37,7 @@ def mostrar_pagina_procedimentos():
                 st.success("Procedimento cadastrado com sucesso!")
                 st.rerun()  # Recarrega a página
             except Exception as e:
-                session.rollbackback()
+                session.rolback()
         else:
             st.error("Por favor, preencha todos os campos obrigatórios.")
     if st.checkbox("Listar procedimentos", value=True):
@@ -97,7 +97,7 @@ def mostrar_pagina_procedimentos():
                         st.success("Procedimento atualizado com sucesso!")
                         st.rerun()  # Recarrega a página
                     except Exception as e:
-                        session.rollbackback()
+                        session.rollback()
 
                 # Botão para excluir o procedimento
                 if st.button("Excluir Procedimento", key="excluir_procedimento"):
@@ -107,6 +107,6 @@ def mostrar_pagina_procedimentos():
                         st.success("Procedimento excluído com sucesso!")
                         st.rerun()  # Recarrega a página
                     except Exception as e:
-                        session.rollbackback()
+                        session.rollback()
         else:
             st.info("Nenhum procedimento cadastrado no momento.")
