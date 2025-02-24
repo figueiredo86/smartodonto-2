@@ -21,25 +21,33 @@ def get_template_mensagem(paciente_nome, data, hora):
     data_formatada = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
     horario_formatado = f"{hora:02d}:00"
     try:
-        template = session.query(Template).first()
+        # Busca o template com ID 1 (ou o template desejado)
+        template = session.query(Template).filter(Template.template_id == 1).first()
         if template:
-            return (
+            # Substitui os placeholders no template pelo conteúdo formatado
+            mensagem_formatada = (
                 template.template_texto
-                .replace("{nome}", paciente_nome)
-                .replace("{data}", data_formatada)
-                .replace("{hora}", horario_formatado)
+                .replace("{paciente_nome}", paciente_nome)
+                .replace("{data_formatada}", data_formatada)
+                .replace("{horario_formatado}", horario_formatado)
             )
+            return mensagem_formatada
     except SQLAlchemyError as e:
         st.error(f"Erro ao buscar template: {e}")
     finally:
         session.close()
+    
+    # Retorno padrão caso o template não seja encontrado
     return f"Olá {paciente_nome}. Tudo bem? Podemos confirmar sua consulta para o dia {data_formatada} às {horario_formatado}?"
 
 def gerar_link_whatsapp(telefone, mensagem):
+    print(mensagem)
     telefone_formatado = "".join(filter(str.isdigit, telefone))
     if not telefone.startswith("+"):
         telefone_formatado = f"+55{telefone_formatado}"
-    return f"https://wa.me/{telefone_formatado}?text={mensagem.replace(' ', '%20')}"
+    # Codifica a mensagem para uso em URLs
+    mensagem_codificada = mensagem.replace(' ', '%20').replace('\n', '%0A')
+    return f"https://wa.me/{telefone_formatado}?text={mensagem_codificada}"
 
 def agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_id, data_consulta, horario_selecionado, procedimento_valor):
     session = Session()
