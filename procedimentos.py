@@ -37,7 +37,7 @@ def mostrar_pagina_procedimentos():
                 st.success("Procedimento cadastrado com sucesso!")
                 st.rerun()  # Recarrega a página
             except Exception as e:
-                session.rolback()
+                session.rollback()
         else:
             st.error("Por favor, preencha todos os campos obrigatórios.")
     if st.checkbox("Listar procedimentos", value=True):
