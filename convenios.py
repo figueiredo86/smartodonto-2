@@ -2,23 +2,7 @@ import streamlit as st
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
-from db.models import Convenio
-import os
-from dotenv import load_dotenv
-
-# Carrega as variáveis de ambiente
-load_dotenv()
-
-# Configura a URL do banco de dados
-DATABASE_URL = f"mysql+pymysql://{os.getenv('DB_USER')}:{os.getenv('DB_PWD')}@{os.getenv('DB_HOST')}/{os.getenv('DB_DATABASE')}"
-
-# Cria a engine do SQLAlchemy com configurações de pool
-engine = create_engine(
-    DATABASE_URL,
-    pool_recycle=3600,  # Recicla a conexão após 1 hora
-    pool_timeout=30,    # Tempo máximo de espera para obter uma conexão
-    pool_pre_ping=True  # Verifica a conexão antes de usá-la
-)
+from db.models import engine, Convenio
 
 # Cria a fábrica de sessões
 Session = sessionmaker(bind=engine)

@@ -5,12 +5,13 @@ from procedimentos import mostrar_pagina_procedimentos
 from profissionais import mostrar_pagina_profissionais
 from agenda import mostrar_pagina_agenda
 from horarios import mostrar_pagina_horarios
+from inventario import mostrar_pagina_inventario
 
 # Sidebar com menu
 st.sidebar.title("Menu")
 opcao = st.sidebar.radio(
     "Selecione uma opção:",
-    ("Pacientes", "Convênios", "Procedimentos", "Profissionais", "Agenda", "Horários")
+    ("Pacientes", "Convênios", "Procedimentos", "Profissionais", "Agenda", "Horários", "Inventário")
 )
 
 
@@ -29,3 +30,5 @@ elif opcao == "Horários":
     mostrar_pagina_horarios()
 elif opcao == "Agenda":
     mostrar_pagina_agenda()
+elif opcao == "Inventário":
+    mostrar_pagina_inventario()

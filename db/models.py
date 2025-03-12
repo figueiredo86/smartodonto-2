@@ -97,6 +97,17 @@ class Template(Base):
     template_id = Column(Integer, primary_key=True, autoincrement=True)
     template_texto = Column(String(200), nullable=False)
 
+# Adicione o seguinte código ao arquivo `models.py`
+
+class Inventario(Base):
+    __tablename__ = 'inventario'
+    
+    item_id = Column(Integer, primary_key=True, autoincrement=True)
+    item_nome = Column(String(100), nullable=False)
+    item_descricao = Column(String(255), nullable=True)
+    item_quantidade = Column(Integer, nullable=False, default=0)
+    item_status = Column(Integer, nullable=False, default=1)  # 1 para ativo, 0 para inativo
+
 
 # Cria as tabelas no banco de dados (se não existirem)
 Base.metadata.create_all(engine)

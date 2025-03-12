@@ -1,3 +1,4 @@
 sqlalchemy
 pymysql
 python-dotenv
+plotly

@@ -2,3 +2,5 @@
 tmp.py
 motivos.xlsx
 *-bkp*
+__pycache__
+db/__pycache__

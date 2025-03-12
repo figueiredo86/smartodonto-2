@@ -1,0 +1,187 @@
+# Arquivo: inventario.py
+
+import streamlit as st
+import pandas as pd
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from db.models import engine, Inventario
+
+# Cria a fábrica de sessões
+Session = sessionmaker(bind=engine)
+
+# Função para criar uma nova sessão
+def criar_sessao():
+    return Session()
+
+# Função para adicionar um novo item ao inventário
+def adicionar_item(nome, descricao):
+    session = criar_sessao()  # Recria a sessão
+    try:
+        novo_item = Inventario(
+            item_nome=nome,
+            item_descricao=descricao,
+            item_quantidade=0  # Inicia com quantidade zero
+        )
+        session.add(novo_item)
+        session.commit()
+        st.success("Item cadastrado com sucesso!")
+    except SQLAlchemyError as e:
+        session.rollback()
+        st.error(f"Erro ao cadastrar item: {e}")
+    finally:
+        session.close()  # Fecha a sessão após o uso
+
+# Função para editar um item existente
+def editar_item(item, novo_nome, nova_descricao):
+    session = criar_sessao()  # Recria a sessão
+    try:
+        item.item_nome = novo_nome
+        item.item_descricao = nova_descricao
+        session.commit()
+        st.success("Item atualizado com sucesso!")
+        st.rerun()
+    except SQLAlchemyError as e:
+        session.rollback()
+        st.error(f"Erro ao atualizar item: {e}")
+    finally:
+        session.close()  # Fecha a sessão após o uso
+
+# Função para atualizar a quantidade de um item
+def atualizar_quantidade(item_id, nova_quantidade):
+    session = criar_sessao()  # Recria a sessão
+    try:
+        item = session.query(Inventario).filter_by(item_id=item_id).first()
+        if item:
+            item.item_quantidade = nova_quantidade
+            session.commit()
+            st.success("Quantidade atualizada com sucesso!")
+        else:
+            st.error("Item não encontrado.")
+    except SQLAlchemyError as e:
+        session.rollback()
+        st.error(f"Erro ao atualizar quantidade: {e}")
+    finally:
+        session.close()  # Fecha a sessão após o uso
+
+# Função para excluir um item
+def excluir_item(item):
+    session = criar_sessao()  # Recria a sessão
+    try:
+        session.delete(item)
+        session.commit()
+        st.success("Item excluído com sucesso!")
+        st.rerun()
+    except SQLAlchemyError as e:
+        session.rollback()
+        st.error(f"Erro ao excluir item: {e}")
+    finally:
+        session.close()  # Fecha a sessão após o uso
+
+# Função principal para exibir a página de inventário
+def mostrar_pagina_inventario():
+    st.title("SmartOdonto - Inventário")
+
+    # Formulário para adicionar novo item
+    st.write("### Adicionar Novo Item")
+    item_nome = st.text_input("Nome do Item")
+    item_descricao = st.text_area("Descrição do Item")
+
+    if st.button("Salvar Item"):
+        if item_nome:
+            adicionar_item(item_nome, item_descricao)
+        else:
+            st.error("Por favor, preencha o nome do item.")
+
+    # Exibe os itens cadastrados
+    if st.checkbox("Exibir itens", value=True):
+        session = criar_sessao()  # Recria a sessão
+        try:
+            itens = session.query(Inventario).all()
+        except SQLAlchemyError as e:
+            st.error(f"Erro ao realizar consulta: {e}")
+            itens = []
+        finally:
+            session.close()  # Fecha a sessão após o uso
+
+        if itens:
+            # Cria um DataFrame para exibição na tabela
+            dados_itens = []
+            for item in itens:
+                dados_itens.append({
+                    "ID": item.item_id,
+                    "Nome": item.item_nome,
+                    "Descrição": item.item_descricao,
+                    "Quantidade": item.item_quantidade,
+                    "Status": "Ativo" if item.item_status == 1 else "Inativo"
+                })
+            df = pd.DataFrame(dados_itens)
+
+            # Exibe a tabela com campos editáveis e botões de incremento/decremento
+            st.write("### Itens Cadastrados")
+            edited_df = df.copy()  # Cria uma cópia do DataFrame para edição
+
+            # Adiciona uma coluna para ações
+            edited_df["Ações"] = ""
+
+            # Exibe cada item com campos editáveis e botões
+            for index, row in edited_df.iterrows():
+                col1, col2, col3, col4 = st.columns([4, 2, 2, 2])
+                with col1:
+                    st.write(f"{row['Descrição']}")
+                    st.write(f"{row['Nome']}")
+                with col2:
+                    nova_quantidade = st.number_input(
+                        "Quantidade",
+                        value=row["Quantidade"],
+                        min_value=0,
+                        key=f"quantidade_{row['ID']}"
+                    )
+                    edited_df.at[index, "Quantidade"] = nova_quantidade
+                # with col3:
+                #     if st.button("➕", key=f"increment_{row['ID']}"):
+                #         edited_df.at[index, "Quantidade"] += 1
+                # with col4:
+                #     if st.button("➖", key=f"decrement_{row['ID']}"):
+                #         edited_df.at[index, "Quantidade"] = max(0, edited_df.at[index, "Quantidade"] - 1)
+
+            # Botão para salvar as alterações
+            if st.button("Salvar Alterações de Quantidade"):
+                for index, row in edited_df.iterrows():
+                    item_id = row["ID"]
+                    nova_quantidade = row["Quantidade"]
+                    atualizar_quantidade(item_id, nova_quantidade)
+                st.rerun()  # Recarrega a página para exibir as alterações
+        else:
+            st.info("Nenhum item cadastrado no momento.")
+
+        # Opções de editar e excluir
+        if st.checkbox("Editar/Remover item"):
+            session = criar_sessao()  # Recria a sessão
+            try:
+                itens = session.query(Inventario).all()
+                item_id = st.selectbox(
+                    "Selecione um item para editar ou excluir:",
+                    options=[i.item_id for i in itens],
+                    format_func=lambda id: session.query(Inventario).filter_by(item_id=id).first().item_nome,
+                    key="select_item"
+                )
+                item_selecionado = session.query(Inventario).filter_by(item_id=item_id).first()
+
+                # Formulário de edição
+                st.write(f"### Editando Item: {item_selecionado.item_nome}")
+                novo_nome = st.text_input("Nome do Item", value=item_selecionado.item_nome, key="edit_nome")
+                nova_descricao = st.text_area("Descrição do Item", value=item_selecionado.item_descricao, key="edit_descricao")
+
+                if st.button("Salvar Edições", key="salvar_edicoes"):
+                    editar_item(item_selecionado, novo_nome, nova_descricao)
+
+                if st.button("Excluir Item", key="excluir_item"):
+                    excluir_item(item_selecionado)
+            except SQLAlchemyError as e:
+                st.error(f"Erro ao realizar consulta: {e}")
+            finally:
+                session.close()  # Fecha a sessão após o uso
+
+# Executa a aplicação
+if __name__ == "__main__":
+    mostrar_pagina_inventario()
