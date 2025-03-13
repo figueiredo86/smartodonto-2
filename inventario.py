@@ -77,6 +77,15 @@ def excluir_item(item):
     finally:
         session.close()  # Fecha a sessão após o uso
 
+# Função para aplicar cor ao nome do item com base na quantidade
+def aplicar_cor_nome(nome, quantidade):
+    if quantidade > 0 and quantidade <= 5:
+        return f"<span style='background-color: #FF6347;'>{nome}</span>"
+    elif quantidade > 5 and quantidade <= 10:
+        return f"<span style='background-color: #F0E68C;'>{nome}</span>"
+    else:
+        return nome
+
 # Função principal para exibir a página de inventário
 def mostrar_pagina_inventario():
     st.title("SmartOdonto - Inventário")
@@ -127,8 +136,10 @@ def mostrar_pagina_inventario():
             for index, row in edited_df.iterrows():
                 col1, col2, col3, col4 = st.columns([4, 2, 2, 2])
                 with col1:
-                    st.write(f"{row['Descrição']}")
-                    st.write(f"{row['Nome']}")
+                    # Aplica a cor ao nome do item com base na quantidade
+                    nome_colorido = aplicar_cor_nome(row["Nome"], row["Quantidade"])
+                    st.markdown(nome_colorido, unsafe_allow_html=True)
+                    st.write(f"--{row['Descrição']}--")
                 with col2:
                     nova_quantidade = st.number_input(
                         "Quantidade",

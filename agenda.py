@@ -2,8 +2,10 @@ from enum import Enum
 import streamlit as st
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import and_  # Importação adicionada
 from db.models import engine, Horario, Profissional, Paciente, Procedimento, Consulta, Template
 from datetime import datetime, timedelta
+from dateutil.relativedelta import relativedelta
 import pandas as pd
 
 # Definir a enumeração ConsultaStatus
@@ -69,6 +71,50 @@ def agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_id,
         st.error(f"Erro ao agendar consulta: {e}")
     finally:
         session.close()
+
+# Função para consultar limpezas dos últimos 6 meses
+def consultar_limpezas_ultimos_6_meses():
+    session = Session()
+    try:
+        # Calcula a data de 6 meses atrás
+        data_limite = datetime.now() - relativedelta(months=6)
+
+        # Consulta os registros de limpeza (consulta_procedimentoId = 4) dos últimos 6 meses
+        # Realiza JOIN com as tabelas Paciente e Profissional para obter os nomes
+        limpezas = (
+            session.query(
+                Consulta,
+                Paciente.paciente_nome,
+                Profissional.profissional_nome
+            )
+            .join(Paciente, Consulta.consulta_pacienteId == Paciente.paciente_id)
+            .join(Profissional, Consulta.consulta_profissionalId == Profissional.profissional_id)
+            .filter(
+                and_(
+                    Consulta.consulta_procedimentoId == 4,  # Filtra por procedimento de limpeza
+                    Consulta.consulta_data < data_limite  # Filtra pelos últimos 6 meses
+                )
+            )
+            .order_by(Consulta.consulta_data.desc())  # Ordena pela data mais recente
+            .all()
+        )
+
+        # Filtra registros únicos por paciente
+        pacientes_unicos = {}
+        for limpeza, paciente_nome, profissional_nome in limpezas:
+            if limpeza.consulta_pacienteId not in pacientes_unicos:
+                pacientes_unicos[limpeza.consulta_pacienteId] = {
+                    "Consulta": limpeza,
+                    "Paciente Nome": paciente_nome,
+                    "Profissional Nome": profissional_nome
+                }
+
+        return pacientes_unicos.values()
+    except SQLAlchemyError as e:
+        st.error(f"Erro ao consultar limpezas: {e}")
+        return []
+    finally:
+        session.close()  # Fecha a sessão após o uso
 
 def mostrar_pagina_agenda():
     st.title("SmartOdonto - Agenda")
@@ -153,6 +199,24 @@ def mostrar_pagina_agenda():
 
         if st.button("Agendar"):
             agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_padrao, data_consulta, horario_selecionado, procedimento_valor)
+
+    # Feature: Limpeza dos últimos 6 meses
+    if st.checkbox("Limpeza dos últimos 6 meses"):
+        limpezas = consultar_limpezas_ultimos_6_meses()
+        if limpezas:
+            st.write("### Pacientes com Limpeza nos Últimos 6 Meses")
+            dados_limpezas = []
+            for limpeza_info in limpezas:
+                limpeza = limpeza_info["Consulta"]
+                dados_limpezas.append({
+                    "Paciente": limpeza_info["Paciente Nome"],
+                    "Profissional": limpeza_info["Profissional Nome"],
+                    "Data da Limpeza": limpeza.consulta_data,
+                    "Valor Total": limpeza.consulta_valor_total
+                })
+            st.table(pd.DataFrame(dados_limpezas))
+        else:
+            st.info("Status de limpeza em dia")
 
 # Executar a aplicação
 if __name__ == "__main__":
