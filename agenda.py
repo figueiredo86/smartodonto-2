@@ -2,10 +2,9 @@ from enum import Enum
 import streamlit as st
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import and_  # Importação adicionada
+from sqlalchemy import and_  # Importação necessária para o filtro
 from db.models import engine, Horario, Profissional, Paciente, Procedimento, Consulta, Template
 from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
 import pandas as pd
 
 # Definir a enumeração ConsultaStatus
@@ -18,13 +17,14 @@ class ConsultaStatus(Enum):
 # Criar sessão para o banco de dados
 Session = sessionmaker(bind=engine)
 
-def get_template_mensagem(paciente_nome, data, hora):
+# Função para buscar o template de mensagem
+def get_template_mensagem(paciente_nome, data, hora, template_id=1):
     session = Session()
     data_formatada = datetime.strptime(data, "%Y-%m-%d").strftime("%d/%m/%Y")
     horario_formatado = f"{hora:02d}:00"
     try:
-        # Busca o template com ID 1 (ou o template desejado)
-        template = session.query(Template).filter(Template.template_id == 1).first()
+        # Busca o template com o ID especificado
+        template = session.query(Template).filter(Template.template_id == template_id).first()
         if template:
             # Substitui os placeholders no template pelo conteúdo formatado
             mensagem_formatada = (
@@ -42,6 +42,7 @@ def get_template_mensagem(paciente_nome, data, hora):
     # Retorno padrão caso o template não seja encontrado
     return f"Olá {paciente_nome}. Tudo bem? Podemos confirmar sua consulta para o dia {data_formatada} às {horario_formatado}?"
 
+# Função para gerar link do WhatsApp
 def gerar_link_whatsapp(telefone, mensagem):
     telefone_formatado = "".join(filter(str.isdigit, telefone))
     if not telefone.startswith("+"):
@@ -50,6 +51,7 @@ def gerar_link_whatsapp(telefone, mensagem):
     mensagem_codificada = mensagem.replace(' ', '%20').replace('\n', '%0A')
     return f"https://wa.me/{telefone_formatado}?text={mensagem_codificada}"
 
+# Função para agendar consulta
 def agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_id, data_consulta, horario_selecionado, procedimento_valor):
     session = Session()
     try:
@@ -72,19 +74,20 @@ def agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_id,
     finally:
         session.close()
 
-# Função para consultar limpezas dos últimos 6 meses
-def consultar_limpezas_ultimos_6_meses():
+# Função para consultar limpezas mais antigas que 6 meses
+def consultar_limpezas_mais_antigas_que_6_meses():
     session = Session()
     try:
         # Calcula a data de 6 meses atrás
-        data_limite = datetime.now() - relativedelta(months=6)
+        data_limite = datetime.now() - timedelta(days=180)
 
-        # Consulta os registros de limpeza (consulta_procedimentoId = 4) dos últimos 6 meses
+        # Consulta os registros de limpeza (consulta_procedimentoId = 4) mais antigos que 6 meses
         # Realiza JOIN com as tabelas Paciente e Profissional para obter os nomes
         limpezas = (
             session.query(
                 Consulta,
                 Paciente.paciente_nome,
+                Paciente.paciente_telefone,  # Adicionado para enviar mensagens
                 Profissional.profissional_nome
             )
             .join(Paciente, Consulta.consulta_pacienteId == Paciente.paciente_id)
@@ -92,7 +95,7 @@ def consultar_limpezas_ultimos_6_meses():
             .filter(
                 and_(
                     Consulta.consulta_procedimentoId == 4,  # Filtra por procedimento de limpeza
-                    Consulta.consulta_data < data_limite  # Filtra pelos últimos 6 meses
+                    Consulta.consulta_data < data_limite  # Filtra por registros mais antigos que 6 meses
                 )
             )
             .order_by(Consulta.consulta_data.desc())  # Ordena pela data mais recente
@@ -101,11 +104,12 @@ def consultar_limpezas_ultimos_6_meses():
 
         # Filtra registros únicos por paciente
         pacientes_unicos = {}
-        for limpeza, paciente_nome, profissional_nome in limpezas:
+        for limpeza, paciente_nome, paciente_telefone, profissional_nome in limpezas:
             if limpeza.consulta_pacienteId not in pacientes_unicos:
                 pacientes_unicos[limpeza.consulta_pacienteId] = {
                     "Consulta": limpeza,
                     "Paciente Nome": paciente_nome,
+                    "Paciente Telefone": paciente_telefone,  # Adicionado para enviar mensagens
                     "Profissional Nome": profissional_nome
                 }
 
@@ -116,6 +120,7 @@ def consultar_limpezas_ultimos_6_meses():
     finally:
         session.close()  # Fecha a sessão após o uso
 
+# Função principal para exibir a página de agenda
 def mostrar_pagina_agenda():
     st.title("SmartOdonto - Agenda")
     session = Session()
@@ -200,23 +205,35 @@ def mostrar_pagina_agenda():
         if st.button("Agendar"):
             agendar_consulta(paciente_id, profissional_id, procedimento_id, convenio_padrao, data_consulta, horario_selecionado, procedimento_valor)
 
-    # Feature: Limpeza dos últimos 6 meses
-    if st.checkbox("Limpeza dos últimos 6 meses"):
-        limpezas = consultar_limpezas_ultimos_6_meses()
+    # Feature: Limpezas mais antigas que 6 meses
+    if st.checkbox("Limpezas mais antigas que 6 meses"):
+        limpezas = consultar_limpezas_mais_antigas_que_6_meses()
         if limpezas:
-            st.write("### Pacientes com Limpeza nos Últimos 6 Meses")
+            st.write("### Pacientes com Limpeza Antiga (mais de 6 meses)")
             dados_limpezas = []
             for limpeza_info in limpezas:
                 limpeza = limpeza_info["Consulta"]
+                paciente_nome = limpeza_info["Paciente Nome"]
+                paciente_telefone = limpeza_info["Paciente Telefone"]
+                profissional_nome = limpeza_info["Profissional Nome"]
+
+                # Formata a mensagem usando o template com ID 2
+                mensagem = get_template_mensagem(paciente_nome, limpeza.consulta_data, limpeza.consulta_hora, template_id=2)
+                link_whatsapp = gerar_link_whatsapp(paciente_telefone, mensagem)
+
                 dados_limpezas.append({
-                    "Paciente": limpeza_info["Paciente Nome"],
-                    "Profissional": limpeza_info["Profissional Nome"],
+                    "Paciente": paciente_nome,
+                    "Profissional": profissional_nome,
                     "Data da Limpeza": limpeza.consulta_data,
-                    "Valor Total": limpeza.consulta_valor_total
+                    "Valor Total": limpeza.consulta_valor_total,
+                    "Ação": f'<a href="{link_whatsapp}" target="_blank"><button>Enviar Lembrete</button></a>'
                 })
-            st.table(pd.DataFrame(dados_limpezas))
+
+            # Exibe a tabela com os dados e o botão de enviar mensagem
+            df_limpezas = pd.DataFrame(dados_limpezas)
+            st.write(df_limpezas.to_html(escape=False), unsafe_allow_html=True)
         else:
-            st.info("Status de limpeza em dia")
+            st.info("Nenhuma limpeza registrada há mais de 6 meses.")
 
 # Executar a aplicação
 if __name__ == "__main__":
