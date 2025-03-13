@@ -5,6 +5,7 @@ import pandas as pd
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.exc import SQLAlchemyError
 from db.models import engine, Inventario
+from fpdf import FPDF  # Biblioteca para gerar PDFs
 
 # Cria a fábrica de sessões
 Session = sessionmaker(bind=engine)
@@ -86,6 +87,32 @@ def aplicar_cor_nome(nome, quantidade):
     else:
         return nome
 
+# Função para gerar PDF da tabela
+def gerar_pdf_tabela(df):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Adiciona o título do PDF
+    pdf.cell(200, 10, txt="Relatório de Itens do Inventário", ln=True, align="C")
+
+    # Adiciona os cabeçalhos da tabela
+    colunas = df.columns
+    for coluna in colunas:
+        pdf.cell(40, 10, txt=coluna, border=1, align="C")
+    pdf.ln()
+
+    # Adiciona os dados da tabela
+    for index, row in df.iterrows():
+        for coluna in colunas:
+            pdf.cell(40, 10, txt=str(row[coluna]), border=1, align="C")
+        pdf.ln()
+
+    # Salva o PDF em um arquivo temporário
+    pdf_output = "tabela_inventario.pdf"
+    pdf.output(pdf_output)
+    return pdf_output
+
 # Função principal para exibir a página de inventário
 def mostrar_pagina_inventario():
     st.title("SmartOdonto - Inventário")
@@ -148,12 +175,6 @@ def mostrar_pagina_inventario():
                         key=f"quantidade_{row['ID']}"
                     )
                     edited_df.at[index, "Quantidade"] = nova_quantidade
-                # with col3:
-                #     if st.button("➕", key=f"increment_{row['ID']}"):
-                #         edited_df.at[index, "Quantidade"] += 1
-                # with col4:
-                #     if st.button("➖", key=f"decrement_{row['ID']}"):
-                #         edited_df.at[index, "Quantidade"] = max(0, edited_df.at[index, "Quantidade"] - 1)
 
             # Botão para salvar as alterações
             if st.button("Salvar Alterações de Quantidade"):
@@ -162,6 +183,18 @@ def mostrar_pagina_inventario():
                     nova_quantidade = row["Quantidade"]
                     atualizar_quantidade(item_id, nova_quantidade)
                 st.rerun()  # Recarrega a página para exibir as alterações
+
+            # Botão para gerar e exibir o PDF
+            if st.button("Gerar PDF da Tabela"):
+                pdf_output = gerar_pdf_tabela(df)
+                with open(pdf_output, "rb") as pdf_file:
+                    st.download_button(
+                        label="Baixar PDF",
+                        data=pdf_file,
+                        file_name="tabela_inventario.pdf",
+                        mime="application/pdf"
+                    )
+                st.success("PDF gerado com sucesso! Clique no botão acima para baixar.")
         else:
             st.info("Nenhum item cadastrado no momento.")
 
