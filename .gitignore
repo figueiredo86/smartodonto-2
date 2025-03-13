@@ -2,5 +2,7 @@
 tmp.py
 motivos.xlsx
 *-bkp*
+*.xlsx
 __pycache__
 db/__pycache__
+*.pdf
